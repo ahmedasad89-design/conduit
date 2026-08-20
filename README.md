@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/macOS-26%2B-black" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
+  <img src="https://github.com/ahmedasad89-design/conduit/actions/workflows/ci.yml/badge.svg" alt="build">
 </p>
 
 <p align="center">

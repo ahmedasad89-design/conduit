@@ -15,41 +15,23 @@ jobs:
       - name: Show toolchain
         run: |
           swift --version
-          xcodebuild -version || true
           xcode-select -p
 
-      # This package needs swift-tools-version 6.2 for `.macOS(.v26)`, and the
-      # macOS 26 SDK to build against. GitHub's hosted runners lag Apple's
-      # releases by months. Rather than show a permanently red badge for a
-      # project that builds fine locally, the job checks first and skips
-      # cleanly — it will start doing real work the moment the runners catch up.
-      - name: Check the runner can build this
-        id: capability
-        run: |
-          if swift package tools-version 2>/dev/null | grep -qE '^6\.[2-9]|^[7-9]\.'; then
-            SUPPORTED=$(swift package tools-version --version 2>/dev/null || echo "")
-          fi
-          if swift package dump-package >/dev/null 2>&1; then
-            echo "able=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "able=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Runner toolchain is older than this package requires (Swift 6.2 / macOS 26 SDK). Skipping build."
-          fi
-
+      # Package.swift points the test target at the Command Line Tools for the
+      # Swift Testing runtime, because that is what this project is developed
+      # against. Those extra rpaths and the plugin path are harmless on a runner
+      # with full Xcode — dyld skips search paths that do not exist, and Xcode
+      # supplies its own copies of both.
       - name: Build
-        if: steps.capability.outputs.able == 'true'
         run: swift build
 
       - name: Test
-        if: steps.capability.outputs.able == 'true'
         run: swift test
 
       - name: Assemble the app bundle
-        if: steps.capability.outputs.able == 'true'
         run: ./build.sh release
 
       - name: Check the bundle came out intact
-        if: steps.capability.outputs.able == 'true'
         run: |
           test -x Conduit.app/Contents/MacOS/Conduit
           test -f Conduit.app/Contents/Resources/Conduit.icns
@@ -57,7 +39,6 @@ jobs:
           codesign --verify --strict Conduit.app
 
       - name: Upload the app
-        if: steps.capability.outputs.able == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Conduit-app
