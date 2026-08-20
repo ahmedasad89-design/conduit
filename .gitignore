@@ -1,0 +1,6 @@
+.build/
+.DS_Store
+Conduit.app/
+dist/
+# Intermediate icon output; build.sh regenerates it from Tools/makeicon.swift.
+Resources/Conduit.iconset/
