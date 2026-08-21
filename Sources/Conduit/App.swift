@@ -31,6 +31,13 @@ struct ConduitApp: App {
             MainWindow(store: store)
         }
         .defaultSize(width: 1000, height: 720)
+        // A `Window` scene deliberately does not come back once the user has
+        // closed it, and that state survives relaunch. For an app whose whole
+        // point is a window you open occasionally, that reads as "the app is
+        // broken" — it launches, puts an item in the menu bar, and shows
+        // nothing. Launch presented; the menu bar item is still there for
+        // anyone who wants it out of the way.
+        .defaultLaunchBehavior(.presented)
 
         MenuBarExtra {
             MenuBarPanel(store: store)

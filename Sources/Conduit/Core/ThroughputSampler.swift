@@ -5,6 +5,15 @@ import IOKit.storage
 struct DeviceReading: Equatable, Sendable {
     var identity: DeviceIdentity
     var sample: DeviceSample
+    /// Sticky version of `sample.isActive`, for anything that animates.
+    ///
+    /// Raw activity flaps: a drive being indexed, or any bursty workload, goes
+    /// active/idle/active on consecutive ticks. Driving a transition or a
+    /// symbol effect straight off that restarts an animation twice a second,
+    /// and over a vibrant surface the compositor then re-blurs continuously —
+    /// measured at over 50% of a core on a 2 TB drive mid-Spotlight-index.
+    /// The store sets this with hysteresis so the visual state settles.
+    var isBusy: Bool = false
 }
 
 /// Reads `IOBlockStorageDriver`'s `Statistics` dictionary on a fixed interval and

@@ -163,3 +163,48 @@ struct SecondRoundRegressionTests {
         #expect(message?.contains("USB 2.0 High-Speed") == true)
     }
 }
+
+/// A drive being Spotlight-indexed goes active/idle/active on consecutive
+/// ticks. Driving animations straight off that restarted a transition twice a
+/// second, and over a vibrant surface the compositor re-blurred continuously —
+/// measured at over 50% of a core on a 2 TB drive mid-index.
+@Suite("Activity hysteresis")
+struct ActivityHysteresisTests {
+
+    /// Mirrors `MonitorStore.applyBusyHysteresis`: busy latches on immediately
+    /// and only clears after the linger window has passed with no activity.
+    private func busyStates(activity: [Bool], linger: Int) -> [Bool] {
+        var lastBusy = Int.min / 2
+        return activity.enumerated().map { tick, active in
+            if active { lastBusy = tick }
+            return tick - lastBusy <= linger
+        }
+    }
+
+    @Test("a single quiet tick between two bursts does not read as stopped")
+    func flappingStaysSettled() {
+        // active, idle, active, idle — the pattern a drive under indexing makes.
+        let states = busyStates(activity: [true, false, true, false, true, false], linger: 6)
+        #expect(states.allSatisfy { $0 }, "busy flickered during a bursty workload")
+    }
+
+    @Test("busy turns on immediately, with no delay on the first byte")
+    func latchesOnAtOnce() {
+        #expect(busyStates(activity: [true], linger: 6) == [true])
+    }
+
+    @Test("a drive that genuinely stops does stop looking busy")
+    func clearsAfterTheWindow() {
+        var activity = [true]
+        activity.append(contentsOf: Array(repeating: false, count: 10))
+        let states = busyStates(activity: activity, linger: 6)
+        #expect(states[6], "cleared too early — a short gap would flicker")
+        #expect(!states[7], "never cleared — a finished drive would look busy forever")
+    }
+
+    @Test("a device idle from the start is never marked busy")
+    func idleFromColdIsNotBusy() {
+        #expect(busyStates(activity: Array(repeating: false, count: 5), linger: 6)
+                    .allSatisfy { !$0 })
+    }
+}

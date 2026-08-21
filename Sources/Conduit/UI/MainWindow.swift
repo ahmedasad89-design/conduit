@@ -127,7 +127,7 @@ struct DeviceRow: View, Equatable {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: identity.symbolName)
-                .foregroundStyle(reading.sample.isActive ? Ink.read : .secondary)
+                .foregroundStyle(reading.isBusy ? Ink.read : .secondary)
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -141,11 +141,11 @@ struct DeviceRow: View, Equatable {
 
             Spacer(minLength: 4)
 
-            if reading.sample.isActive {
+            if reading.isBusy {
                 Sparkline(points: points, tint: Ink.read)
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: reading.sample.isActive)
+        .animation(.easeInOut(duration: 0.25), value: reading.isBusy)
     }
 }

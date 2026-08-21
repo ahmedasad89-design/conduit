@@ -51,8 +51,8 @@ struct DeviceDetailView: View, Equatable {
         HStack(alignment: .top, spacing: 16) {
             Image(systemName: identity.symbolName)
                 .font(.system(size: 34, weight: .light))
-                .foregroundStyle(sample.isActive ? Ink.read : .secondary)
-                .symbolEffect(.pulse, isActive: sample.isActive)
+                .foregroundStyle(reading.isBusy ? Ink.read : .secondary)
+                .symbolEffect(.pulse, isActive: reading.isBusy)
                 .frame(width: 44)
 
             VStack(alignment: .leading, spacing: 10) {
@@ -65,7 +65,7 @@ struct DeviceDetailView: View, Equatable {
                 }
 
                 HeroMetric(bytesPerSecond: sample.totalBytesPerSecond,
-                           caption: sample.isActive ? "moving now" : "idle")
+                           caption: reading.isBusy ? "moving now" : "idle")
 
                 HStack(spacing: 18) {
                     DirectionalRate(symbol: "arrow.down", label: "Read",

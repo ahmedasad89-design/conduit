@@ -123,6 +123,14 @@ final class MonitorStore {
     private var pumps: [Task<Void, Never>] = []
     private var sequence: UInt64 = 0
     private var startedAtNanos: UInt64 = 0
+    /// Tick each device was last genuinely moving data, for the `isBusy`
+    /// hysteresis below.
+    private var lastBusyTick: [UInt64: Int] = [:]
+    /// Roughly 1.5 seconds at the 4 Hz sample rate. Long enough that a gap
+    /// between two bursts does not read as "stopped", short enough that a drive
+    /// which really has finished stops looking busy promptly.
+    private static let busyLingerTicks = 6
+
     /// Captured when a run starts: results are filed under the drive's serial,
     /// and the volume alone does not identify the drive.
     private var benchmarkDrive: DeviceIdentity?
@@ -131,7 +139,8 @@ final class MonitorStore {
 
     func start() {
         startedAtNanos = monotonicNanos()
-        Self.sweepAbandonedScratchFiles()
+        // Off the main thread, and off the launch path entirely — see below.
+        Task.detached(priority: .utility) { Self.sweepAbandonedScratchFiles() }
         watcher.start()
 
         // Restarting after a stop() only needs the actor's loop back.
@@ -174,7 +183,16 @@ final class MonitorStore {
     /// it cannot clean up after a force-quit or a panic — which could strand up
     /// to 16 GB in a hidden file. Previously the only thing that removed it was
     /// running another test on that same volume.
-    private static func sweepAbandonedScratchFiles() {
+    ///
+    /// `nonisolated`, and always called from a detached task. This enumerates
+    /// every mounted volume, and directory enumeration blocks in `open(2)`:
+    /// on a parked external hard disk that is seconds, and on an unreachable
+    /// network mount it can be much longer. It was originally called
+    /// synchronously from `start()`, which runs inside `App.init()` — so the
+    /// main thread blocked before SwiftUI had built a single scene, and the app
+    /// launched with no window, no menu bar item, and no error. Stranding a
+    /// scratch file is a far smaller problem than never starting.
+    nonisolated private static func sweepAbandonedScratchFiles() {
         for mount in Volumes.current() where mount.isWritable && !mount.isBootVolume {
             BenchmarkRunner.sweepStaleFiles(on: mount.mountPath)
         }
@@ -202,6 +220,8 @@ final class MonitorStore {
     // MARK: - Sampling
 
     private func apply(_ newReadings: [DeviceReading]) {
+        var newReadings = newReadings
+        applyBusyHysteresis(to: &newReadings)
         readings = newReadings
 
         func sorted(_ r: [DeviceReading]) -> [DeviceReading] {
@@ -287,6 +307,20 @@ final class MonitorStore {
            !targets.contains(where: { $0.volume.mountPath == volume.mountPath }) {
             benchmarkVolume = nil
         }
+    }
+
+    /// Turns raw per-tick activity into a settled display state.
+    private func applyBusyHysteresis(to readings: inout [DeviceReading]) {
+        for index in readings.indices {
+            let id = readings[index].identity.id
+            // `gate.tick` has not been advanced for this tick yet, which is
+            // fine — every comparison uses the same origin.
+            if readings[index].sample.isActive { lastBusyTick[id] = gate.tick }
+            let since = gate.tick - (lastBusyTick[id] ?? Int.min / 2)
+            readings[index].isBusy = since <= Self.busyLingerTicks
+        }
+        let live = Set(readings.map(\.identity.id))
+        lastBusyTick = lastBusyTick.filter { live.contains($0.key) }
     }
 
     /// A drive is announced once, when it first appears. The diagnosis itself
